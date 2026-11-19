@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test cle appareil</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:16px;max-width:560px}
+button{display:block;width:100%;font-size:18px;padding:14px;margin:8px 0}
+pre{background:#eee;padding:12px;white-space:pre-wrap;font-size:16px}
+@media(prefers-color-scheme:dark){body{background:#111;color:#eee}pre{background:#222}}
+</style>
+</head>
+<body>
+<h1>Test cle appareil</h1>
+<button id="b1">Créer la clé</button>
+<button id="b2">Relire</button>
+<button id="b3">Signer</button>
+<button id="b4">Effacer l'identifiant seul</button>
+<pre id="out">Aucune action.</pre>
+<script>
+const ID_KEY = 'test-device-id';
+const DB = 'test-key-db', STORE = 'keys', KEY_NAME = 'device-key';
+const out = document.getElementById('out');
+const state = { cle: '-', signature: '-', identifiant: '-', persistant: '-', mode: '-' };
+function show(){
+  out.textContent =
+    '1. clé retrouvée : ' + state.cle + '\n' +
+    '2. signature sans invite : ' + state.signature + '\n' +
+    '3. identifiant local conservé : ' + state.identifiant + '\n' +
+    '4. stockage persistant accordé : ' + state.persistant + '\n' +
+    '5. mode : ' + state.mode + '\n\n' + new Date().toLocaleString('fr-FR');
+}
+function openDb(){
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(STORE);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function getKey(){
+  const db = await openDb();
+  return new Promise((res, rej) => {
+    const q = db.transaction(STORE).objectStore(STORE).get(KEY_NAME);
+    q.onsuccess = () => res(q.result || null);
+    q.onerror = () => rej(q.error);
+  });
+}
+async function putKey(pair){
+  const db = await openDb();
+  return new Promise((res, rej) => {
+    const t = db.transaction(STORE, 'readwrite');
+    t.objectStore(STORE).put(pair, KEY_NAME);
+    t.oncomplete = () => res();
+    t.onerror = () => rej(t.error);
+  });
+}
+function mode(){
+  const inst = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  return inst ? 'application installée' : 'onglet';
+}
+function ident(){ try { return localStorage.getItem(ID_KEY) ? 'oui' : 'non'; } catch(e){ return 'erreur'; } }
+async function refresh(){
+  state.mode = mode();
+  state.identifiant = ident();
+  try { state.cle = (await getKey()) ? 'oui' : 'non'; } catch(e){ state.cle = 'erreur : ' + e.message; }
+  if (navigator.storage && navigator.storage.persisted) {
+    try { state.persistant = (await navigator.storage.persisted()) ? 'oui' : 'non'; } catch(e){ state.persistant = 'erreur'; }
+  } else state.persistant = 'non disponible';
+}
+document.getElementById('b1').onclick = async () => {
+  try {
+    const pair = await crypto.subtle.generateKey({name:'ECDSA', namedCurve:'P-256'}, false, ['sign','verify']);
+    await putKey(pair);
+    localStorage.setItem(ID_KEY, crypto.randomUUID());
+    if (navigator.storage && navigator.storage.persist) {
+      try { state.persistant = (await navigator.storage.persist()) ? 'oui (accordé)' : 'non (refusé)'; } catch(e){ state.persistant = 'erreur'; }
+    } else state.persistant = 'non disponible';
+    const p = state.persistant;
+    await refresh();
+    state.persistant = p;
+    state.signature = '-';
+  } catch(e){ state.cle = 'erreur : ' + e.message; }
+  show();
+};
+document.getElementById('b2').onclick = async () => { await refresh(); state.signature = '-'; show(); };
+document.getElementById('b3').onclick = async () => {
+  await refresh();
+  try {
+    const pair = await getKey();
+    if (!pair) { state.signature = 'pas de clé'; }
+    else {
+      const sig = await crypto.subtle.sign({name:'ECDSA', hash:'SHA-256'}, pair.privateKey, new TextEncoder().encode('test'));
+      state.signature = 'oui (' + sig.byteLength + ' octets)';
+    }
+  } catch(e){ state.signature = 'erreur : ' + e.message; }
+  show();
+};
+document.getElementById('b4').onclick = async () => {
+  try { localStorage.removeItem(ID_KEY); } catch(e){}
+  await refresh(); state.signature = '-'; show();
+};
+refresh().then(show);
+</script>
+</body>
+</html>
