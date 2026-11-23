@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Test cle appareil</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Test cle">
+<meta name="theme-color" content="#1f4e79">
 <style>
 body{font-family:system-ui,sans-serif;margin:16px;max-width:560px}
 button{display:block;width:100%;font-size:18px;padding:14px;margin:8px 0}
@@ -102,6 +109,7 @@ document.getElementById('b4').onclick = async () => {
   await refresh(); state.signature = '-'; show();
 };
 refresh().then(show);
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>
